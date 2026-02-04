@@ -5,7 +5,7 @@ Inspirado en el sistema de plugins de Linux
 import os
 import importlib.util
 import inspect
-from typing import List, Dict, Type
+from typing import List, Dict, Type, Optional, Tuple
 from config.settings import MODS_DIR
 
 
@@ -15,7 +15,8 @@ class Application:
     Los mods deben heredar de esta clase para ser cargados correctamente
     """
     
-    def __init__(self, name: str, icon_path: str = None, color: tuple = None):
+    def __init__(self, name: str = "Unnamed App", icon_path: Optional[str] = None,
+                 color: Optional[Tuple[int, int, int]] = None):
         """Inicializa una aplicación
         
         Args:
@@ -171,7 +172,7 @@ class MiAplicacion(Application):
         except Exception as e:
             print(f"  ❌ Error cargando {module_name}: {e}")
     
-    def create_app_instance(self, plugin_class: Type[Application]) -> Application:
+    def create_app_instance(self, plugin_class: Type[Application]) -> Optional[Application]:
         """Crea una instancia de una aplicación
         
         Args:

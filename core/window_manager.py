@@ -3,7 +3,7 @@ Window Manager - Gestiona todas las ventanas del sistema
 Inspirado en Windows 11 con funcionalidad estilo Linux
 """
 import pygame
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple, Any
 from config.settings import *
 
 
@@ -11,7 +11,7 @@ class Window:
     """Representa una ventana del sistema"""
     
     def __init__(self, title: str, x: int, y: int, width: int, height: int, 
-                 color: tuple = None, app_ref=None):
+                 color: Optional[Tuple[int, int, int]] = None, app_ref: Any = None):
         """Inicializa una ventana
         
         Args:
@@ -232,7 +232,7 @@ class WindowManager:
         self.focused_window: Optional[Window] = None
     
     def create_window(self, title: str, width: int = 600, height: int = 400,
-                     color: tuple = None, app_ref=None) -> Window:
+                     color: Optional[Tuple[int, int, int]] = None, app_ref: Any = None) -> Window:
         """Crea una nueva ventana
         
         Args:

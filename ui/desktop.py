@@ -2,14 +2,15 @@
 Desktop - Escritorio del sistema con iconos y fondos
 """
 import pygame
-from typing import List
+from typing import List, Optional, Tuple, Any
 from config.settings import *
 
 
 class DesktopIcon:
     """Representa un icono en el escritorio"""
     
-    def __init__(self, name: str, x: int, y: int, app_ref=None, color: tuple = None):
+    def __init__(self, name: str, x: int, y: int, app_ref: Any = None,
+                 color: Optional[Tuple[int, int, int]] = None):
         """Inicializa un icono de escritorio
         
         Args:
@@ -110,7 +111,8 @@ class Desktop:
             icon = DesktopIcon(name, start_x, y, color=color)
             self.icons.append(icon)
     
-    def add_icon(self, name: str, app_ref=None, color: tuple = None):
+    def add_icon(self, name: str, app_ref: Any = None,
+                 color: Optional[Tuple[int, int, int]] = None):
         """Añade un icono al escritorio
         
         Args:
@@ -144,7 +146,7 @@ class Desktop:
         for icon in self.icons:
             icon.render(self.screen, self.theme_manager)
     
-    def handle_click(self, pos: tuple) -> DesktopIcon:
+    def handle_click(self, pos: Tuple[int, int]) -> Optional[DesktopIcon]:
         """Maneja clicks en el escritorio
         
         Args:

@@ -2,6 +2,7 @@
 Theme Manager - Gestiona temas, fuentes y estilos visuales
 """
 import pygame
+from typing import Optional, Tuple
 from config.settings import *
 
 
@@ -55,7 +56,7 @@ class ThemeManager:
         """
         return getattr(Colors, color_name.upper(), Colors.PINK)
     
-    def draw_rounded_rect(self, surface: pygame.Surface, color: tuple, 
+    def draw_rounded_rect(self, surface: pygame.Surface, color: Tuple[int, int, int], 
                          rect: pygame.Rect, radius: int = 8):
         """Dibuja un rectángulo con esquinas redondeadas
         
@@ -68,8 +69,8 @@ class ThemeManager:
         pygame.draw.rect(surface, color, rect, border_radius=radius)
     
     def draw_button(self, surface: pygame.Surface, rect: pygame.Rect,
-                   text: str, color: tuple = None, hover: bool = False,
-                   font_size: int = FONT_SIZE_MEDIUM):
+                   text: str, color: Optional[Tuple[int, int, int]] = None,
+                   hover: bool = False, font_size: int = FONT_SIZE_MEDIUM):
         """Dibuja un botón estilo pastel
         
         Args:
