@@ -282,6 +282,14 @@ class WindowManager:
             window: Ventana a cerrar
         """
         if window in self.windows:
+            # Notificar a la app y resetear estado
+            if window.app_ref:
+                try:
+                    window.app_ref.on_close()
+                except Exception:
+                    pass
+                window.app_ref.is_running = False
+                window.app_ref.window = None
             self.windows.remove(window)
             
             if self.focused_window == window:

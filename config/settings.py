@@ -9,6 +9,7 @@ ASSETS_DIR = os.path.join(BASE_DIR, "assets")
 FONTS_DIR = os.path.join(ASSETS_DIR, "fonts")
 IMGS_DIR = os.path.join(ASSETS_DIR, "imgs")
 MODS_DIR = os.path.join(BASE_DIR, "mods")
+USER_DATA_DIR = os.path.join(BASE_DIR, "user_data")
 
 # Configuración de pantalla
 SCREEN_WIDTH = 1280
@@ -24,10 +25,12 @@ FONT_SIZE_LARGE = 24
 
 # Logo del sistema
 SYSTEM_LOGO = os.path.join(IMGS_DIR, "System.png")
+SETUP_FILE = os.path.join(USER_DATA_DIR, "setup.json")
 
 # Paleta de colores pastel
 class Colors:
     # Colores principales
+    BLACK = (0, 0, 0)                # #000000
     PINK = (255, 179, 217)           # #FFB3D9
     BLUE = (179, 217, 255)           # #B3D9FF
     GREEN = (179, 255, 217)          # #B3FFD9

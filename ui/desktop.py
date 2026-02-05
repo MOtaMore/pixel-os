@@ -1,8 +1,10 @@
 """
 Desktop - Escritorio del sistema con iconos y fondos
 """
+import os
 import pygame
 from typing import List, Optional, Tuple, Any
+from config.i18n import tr
 from config.settings import *
 
 
@@ -10,7 +12,7 @@ class DesktopIcon:
     """Representa un icono en el escritorio"""
     
     def __init__(self, name: str, x: int, y: int, app_ref: Any = None,
-                 color: Optional[Tuple[int, int, int]] = None):
+                 color: Optional[Tuple[int, int, int]] = None, app_id: Optional[str] = None):
         """Inicializa un icono de escritorio
         
         Args:
@@ -18,12 +20,14 @@ class DesktopIcon:
             x, y: Posición
             app_ref: Referencia a la aplicación asociada
             color: Color de acento
+            app_id: ID de la aplicación para cargar el icono correcto
         """
         self.name = name
         self.x = x
         self.y = y
         self.app_ref = app_ref
         self.color = color or Colors.BLUE
+        self.app_id = app_id
         
         # Rectángulos
         self.icon_rect = pygame.Rect(x, y, DESKTOP_ICON_SIZE, DESKTOP_ICON_SIZE)
@@ -35,6 +39,28 @@ class DesktopIcon:
         # Estado
         self.selected = False
         self.hover = False
+        
+        # Cargar imagen del icono
+        self.icon_image = self._load_icon_image()
+    
+    def _load_icon_image(self) -> Optional[pygame.Surface]:
+        """Carga la imagen del icono desde archivo
+        
+        Returns:
+            Superficie con la imagen escalada, o None si no se encuentra
+        """
+        if not self.app_id:
+            return None
+        
+        icon_path = os.path.join("assets", "imgs", f"icon_{self.app_id}.png")
+        try:
+            if os.path.exists(icon_path):
+                img = pygame.image.load(icon_path)
+                # Escalar a tamaño del icono
+                return pygame.transform.scale(img, (DESKTOP_ICON_SIZE - 8, DESKTOP_ICON_SIZE - 8))
+        except Exception:
+            pass
+        return None
     
     def update(self, mouse_pos):
         """Actualiza el estado del icono
@@ -59,8 +85,16 @@ class DesktopIcon:
             full_rect.inflate_ip(8, 8)
             pygame.draw.rect(surface, bg_color, full_rect, border_radius=8)
         
-        # Icono (simple cuadrado con color)
-        pygame.draw.rect(surface, self.color, self.icon_rect, border_radius=8)
+        # Icono: mostrar imagen o fallback a color
+        if self.icon_image:
+            # Mostrar imagen del icono
+            img_rect = self.icon_image.get_rect(center=self.icon_rect.center)
+            surface.blit(self.icon_image, img_rect)
+        else:
+            # Fallback: cuadrado de color
+            pygame.draw.rect(surface, self.color, self.icon_rect, border_radius=8)
+        
+        # Borde del icono
         pygame.draw.rect(surface, Colors.BORDER, self.icon_rect, width=2, border_radius=8)
         
         # Label
@@ -100,10 +134,10 @@ class Desktop:
         spacing = DESKTOP_ICON_SIZE + DESKTOP_ICON_SPACING
         
         default_apps = [
-            ("Terminal", Colors.GREEN),
-            ("Editor", Colors.BLUE),
-            ("Archivos", Colors.YELLOW),
-            ("Configuración", Colors.PURPLE),
+            (tr("app.terminal"), Colors.GREEN),
+            (tr("app.text_editor"), Colors.BLUE),
+            (tr("app.file_manager"), Colors.YELLOW),
+            (tr("app.settings"), Colors.PURPLE),
         ]
         
         for i, (name, color) in enumerate(default_apps):
@@ -127,7 +161,10 @@ class Desktop:
         
         y = start_y + (len(self.icons) * spacing)
         
-        icon = DesktopIcon(name, start_x, y, app_ref, color)
+        # Obtener app_id desde la referencia de la aplicación
+        app_id = getattr(app_ref, 'app_id', None) if app_ref else None
+        
+        icon = DesktopIcon(name, start_x, y, app_ref, color, app_id=app_id)
         self.icons.append(icon)
     
     def update(self, dt: float):

@@ -24,7 +24,11 @@
 🪟 **Ventanas Modernas**: Diseño inspirado en Windows 11 con funcionalidad estilo Linux  
 🎬 **Animaciones Fluidas**: Experiencia visual relajante y suave  
 🎨 **Fuente Monocraft**: Tipografía pixel art incluida para máxima autenticidad  
-🎯 **Apps Integradas**: Terminal, editor de texto, explorador de archivos y más
+💾 **Sistema de Archivos Virtual**: Filesystem persistente con carpetas y archivos  
+📝 **Editor de Código Avanzado**: Guardado de archivos y ejecución de código  
+🎯 **Lenguaje Goul**: Lenguaje de programación propio (Python + C# híbrido)  
+📁 **Explorador de Archivos**: Navegación por el filesystem virtual integrado  
+🎯 **Apps Integradas**: Terminal, editor de texto, explorador de archivos, editor de código y más
 
 ## 🚀 Instalación
 
@@ -60,7 +64,60 @@ Presiona `F5` o usa la configuración "🎮 Run Pixel-OS" del panel de Debug.
 - **Click izquierdo**: Interactuar con ventanas e iconos
 - **Arrastrar ventanas**: Click en la barra de título
 - **Minimizar/Maximizar/Cerrar**: Botones en la barra de título
+- **Menú Start**: Click en el botón "SO" de la barra de tareas
 - **ESC**: Salir del sistema
+
+## 🎨 Nuevas Características v1.1
+
+### 📝 Editor de Código con Goul
+
+El editor de código ahora soporta el lenguaje **Goul**, un híbrido entre Python y C#:
+
+**Características:**
+- Guardado de archivos (Ctrl+S)
+- Ejecución de código (F5)
+- Panel de output integrado
+- Sintaxis highlighting básico
+- Indentación automática
+
+**Ejemplo de código Goul:**
+```goul
+// Mi primer programa en Goul
+var nombre = "Pixel";
+var edad = 25;
+
+print("Hola, soy " + nombre);
+print("Tengo " + str(edad) + " años");
+
+var numeros = [1, 2, 3, 4, 5];
+print("Array length: " + str(len(numeros)));
+```
+
+Ver [documentación completa de Goul](docs/GOUL_LANGUAGE.md) para más detalles.
+
+### 💾 Sistema de Archivos Virtual
+
+Filesystem persistente con:
+- Carpetas predeterminadas (Documentos, Imágenes, Música, Vídeos, Descargas, Papelera)
+- Guardado automático en JSON
+- Navegación por carpetas
+- Creación y edición de archivos
+- Integración con todas las aplicaciones
+
+**Ubicación de datos:**
+```
+user_data/
+└── filesystem/
+    └── filesystem.json
+```
+
+### 📁 Explorador de Archivos Mejorado
+
+- Navegación interactiva por el filesystem virtual
+- Botón "Atrás" para volver a carpetas anteriores
+- Botón "Refrescar" para actualizar contenidos
+- Doble click para abrir carpetas
+- Visualización de archivos y carpetas con iconos
 
 ## 🔌 Crear Mods/Addons
 

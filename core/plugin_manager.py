@@ -16,15 +16,17 @@ class Application:
     """
     
     def __init__(self, name: str = "Unnamed App", icon_path: Optional[str] = None,
-                 color: Optional[Tuple[int, int, int]] = None):
+                 color: Optional[Tuple[int, int, int]] = None, app_id: Optional[str] = None):
         """Inicializa una aplicación
         
         Args:
             name: Nombre de la aplicación
             icon_path: Ruta al icono (opcional)
             color: Color de acento pastel (opcional)
+            app_id: Identificador estable de la app
         """
         self.name = name
+        self.app_id = app_id or name
         self.icon_path = icon_path
         self.color = color
         self.window = None
@@ -197,6 +199,10 @@ class MiAplicacion(Application):
         """
         if not app.is_running:
             app.is_running = True
+            
+            # Asignar filesystem si la app lo soporta
+            if hasattr(app, 'set_filesystem'):
+                app.set_filesystem(self.os_ref.filesystem)
             
             # Crear ventana para la aplicación
             window = self.os_ref.window_manager.create_window(

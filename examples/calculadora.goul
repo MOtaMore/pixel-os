@@ -1,0 +1,42 @@
+// 🧮 Calculadora Avanzada en Goul
+
+print("=== Calculadora Goul ===\n");
+
+// Definir números
+var num1 = 25;
+var num2 = 4;
+
+print("Número 1: " + str(num1));
+print("Número 2: " + str(num2));
+
+// Operaciones básicas
+print("\n--- Operaciones Básicas ---");
+print("Suma: " + str(num1 + num2));
+print("Resta: " + str(num1 - num2));
+print("Multiplicación: " + str(num1 * num2));
+print("División: " + str(num1 / num2));
+
+// Cálculos avanzados
+var promedio = (num1 + num2) / 2;
+var diferencia = num1 - num2;
+var producto = num1 * num2;
+
+print("\n--- Cálculos ---");
+print("Promedio: " + str(promedio));
+print("Diferencia: " + str(diferencia));
+print("Producto: " + str(producto));
+
+// Array de operaciones
+var operaciones = [
+    num1 + num2,
+    num1 - num2,
+    num1 * num2,
+    num1 / num2
+];
+
+print("\n--- Resultados Array ---");
+print("Total de operaciones: " + str(len(operaciones)));
+print("Primera operación: " + str(operaciones[0]));
+print("Última operación: " + str(operaciones[3]));
+
+print("\n✨ Calculadora completada!");

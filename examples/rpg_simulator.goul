@@ -1,0 +1,72 @@
+// 🎮 Simulador de Juego RPG en Goul
+
+print("=== ⚔️ RPG Simulator ⚔️ ===\n");
+
+// Stats del jugador
+var jugador_nombre = "Héroe Pixel";
+var jugador_vida = 100;
+var jugador_ataque = 25;
+var jugador_defensa = 15;
+var jugador_nivel = 1;
+
+// Stats del enemigo
+var enemigo_nombre = "Slime Malvado";
+var enemigo_vida = 50;
+var enemigo_ataque = 10;
+
+print("--- Estado Inicial ---");
+print(jugador_nombre + " - Nivel " + str(jugador_nivel));
+print("❤️ Vida: " + str(jugador_vida));
+print("⚔️ Ataque: " + str(jugador_ataque));
+print("🛡️ Defensa: " + str(jugador_defensa));
+
+print("\n--- Enemigo Encontrado ---");
+print(enemigo_nombre + " aparece!");
+print("❤️ Vida enemiga: " + str(enemigo_vida));
+print("⚔️ Ataque enemigo: " + str(enemigo_ataque));
+
+// Simular combate
+print("\n--- ⚔️ Combate ⚔️ ---");
+
+// Turno 1: Jugador ataca
+var danio_jugador = jugador_ataque - 5;
+enemigo_vida = enemigo_vida - danio_jugador;
+print(jugador_nombre + " ataca!");
+print("Daño causado: " + str(danio_jugador));
+print("Vida enemiga restante: " + str(enemigo_vida));
+
+// Turno 2: Enemigo ataca
+var danio_enemigo = enemigo_ataque - jugador_defensa;
+if (danio_enemigo < 0) {
+    danio_enemigo = 0;
+}
+jugador_vida = jugador_vida - danio_enemigo;
+print("\n" + enemigo_nombre + " contraataca!");
+print("Daño recibido: " + str(danio_enemigo));
+print("Vida del jugador: " + str(jugador_vida));
+
+// Turno 3: Ataque final
+print("\n¡Ataque crítico!");
+var danio_critico = jugador_ataque * 2;
+enemigo_vida = enemigo_vida - danio_critico;
+print("Daño crítico: " + str(danio_critico));
+print("Vida enemiga: " + str(enemigo_vida));
+
+// Resultado
+print("\n--- 🏆 Resultado ---");
+if (enemigo_vida <= 0) {
+    print("¡Victoria! " + enemigo_nombre + " ha sido derrotado!");
+    var exp_ganada = 50;
+    print("Experiencia ganada: " + str(exp_ganada));
+} else {
+    print("El combate continúa...");
+}
+
+// Inventario del jugador
+var inventario = ["Poción", "Espada de Hierro", "Escudo", "Pan"];
+print("\n--- 🎒 Inventario ---");
+print("Items: " + str(len(inventario)));
+print("Primer item: " + inventario[0]);
+print("Arma equipada: " + inventario[1]);
+
+print("\n✨ Simulación completada!");
