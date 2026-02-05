@@ -32,6 +32,23 @@ class Application:
         self.window = None
         self.is_running = False
     
+    # Métodos opcionales que pueden ser implementados en subclases
+    def load_file(self, path: str, filename: str) -> None:
+        """Carga un archivo (implementar en subclases)"""
+        pass
+    
+    def open_path(self, path: str) -> None:
+        """Abre una ruta (implementar en subclases)"""
+        pass
+    
+    def set_app_launcher(self, launcher) -> None:
+        """Asigna un launcher de aplicaciones (implementar en subclases)"""
+        pass
+    
+    def set_filesystem(self, filesystem) -> None:
+        """Asigna el filesystem (implementar en subclases)"""
+        pass
+    
     def on_open(self):
         """Llamado cuando se abre la aplicación"""
         pass
@@ -78,6 +95,7 @@ class PluginManager:
         self.os_ref = os_ref
         self.plugins: Dict[str, Application] = {}
         self.plugin_classes: List[Type[Application]] = []
+        self.should_shutdown = False  # Flag para solicitar apagado
         
         # Crear directorio de mods si no existe
         if not os.path.exists(MODS_DIR):

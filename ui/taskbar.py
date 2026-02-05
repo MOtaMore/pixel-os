@@ -43,6 +43,14 @@ class StartMenu:
                     'color': app_ref.color,
                     'app_ref': app_ref,
                 })
+        # Agregar botón de apagado al final
+        self.menu_items.append({
+            'name': 'Apagar',
+            'app_id': 'shutdown',
+            'color': (220, 100, 100),
+            'app_ref': None,
+            'is_shutdown': True,
+        })
     
     def update(self, mouse_pos):
         """Actualiza el menú según la posición del mouse"""
@@ -90,23 +98,32 @@ class StartMenu:
             
             # Fondo si está hovered
             if i == self.hovered_item:
-                pygame.draw.rect(self.screen, Colors.HOVER, item_rect, border_radius=6)
+                hover_color = (200, 80, 80) if item.get('is_shutdown') else Colors.HOVER
+                pygame.draw.rect(self.screen, hover_color, item_rect, border_radius=6)
             
-            # Icono
-            icon_path = os.path.join("assets", "imgs", f"icon_{item['app_id']}.png")
-            try:
-                if os.path.exists(icon_path):
-                    icon_img = pygame.image.load(icon_path)
-                    icon_img = pygame.transform.scale(icon_img, (32, 32))
-                    self.screen.blit(icon_img, (item_rect.x + 5, item_rect.y + 8))
-                else:
+            # Icono o símbolo de apagado
+            if item.get('is_shutdown'):
+                # Dibujar símbolo de apagado (O con línea)
+                icon_rect = pygame.Rect(item_rect.x + 5, item_rect.y + 8, 32, 32)
+                pygame.draw.circle(self.screen, item['color'], icon_rect.center, 14, 2)
+                pygame.draw.line(self.screen, item['color'], 
+                               (icon_rect.centerx, icon_rect.top + 4),
+                               (icon_rect.centerx, icon_rect.top + 10), 2)
+            else:
+                icon_path = os.path.join("assets", "imgs", f"icon_{item['app_id']}.png")
+                try:
+                    if os.path.exists(icon_path):
+                        icon_img = pygame.image.load(icon_path)
+                        icon_img = pygame.transform.scale(icon_img, (32, 32))
+                        self.screen.blit(icon_img, (item_rect.x + 5, item_rect.y + 8))
+                    else:
+                        # Fallback
+                        color_rect = pygame.Rect(item_rect.x + 5, item_rect.y + 8, 32, 32)
+                        pygame.draw.rect(self.screen, item['color'], color_rect, border_radius=4)
+                except Exception:
                     # Fallback
                     color_rect = pygame.Rect(item_rect.x + 5, item_rect.y + 8, 32, 32)
                     pygame.draw.rect(self.screen, item['color'], color_rect, border_radius=4)
-            except Exception:
-                # Fallback
-                color_rect = pygame.Rect(item_rect.x + 5, item_rect.y + 8, 32, 32)
-                pygame.draw.rect(self.screen, item['color'], color_rect, border_radius=4)
             
             # Nombre
             name_text = font_item.render(item['name'], True, Colors.TEXT_PRIMARY)
@@ -128,6 +145,9 @@ class StartMenu:
             )
             if item_rect.collidepoint(pos):
                 self.visible = False
+                # Si es el botón de apagado, retornar especialmente
+                if item.get('is_shutdown'):
+                    return 'SHUTDOWN'
                 return item['app_ref']
         
         return None
@@ -361,9 +381,13 @@ class TaskBar:
             
             # Click en menú de inicio
             if self.start_menu.visible:
-                app_ref = self.start_menu.handle_click(mouse_pos, self.window_manager)
-                if app_ref:
-                    self.plugin_manager.launch_app(app_ref)
+                result = self.start_menu.handle_click(mouse_pos, self.window_manager)
+                if result == 'SHUTDOWN':
+                    # Señal de apagado - cambiar flag en el plugin_manager
+                    if hasattr(self.plugin_manager, 'should_shutdown'):
+                        self.plugin_manager.should_shutdown = True
+                elif result:
+                    self.plugin_manager.launch_app(result)
                 return
             
             # Click en botones de aplicaciones

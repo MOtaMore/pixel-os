@@ -25,7 +25,7 @@ class VirtualFile:
         self.created_at = datetime.now().isoformat()
         self.modified_at = datetime.now().isoformat()
         self.size = len(content)
-        self.original_path = None  # Para papelera: dónde estaba antes
+        self.original_path: Optional[str] = None  # Para papelera: dónde estaba antes
     
     def update_content(self, content: str):
         """Actualiza el contenido del archivo"""
@@ -65,7 +65,7 @@ class VirtualFolder:
         self.files: Dict[str, VirtualFile] = {}
         self.folders: Dict[str, 'VirtualFolder'] = {}
         self.created_at = datetime.now().isoformat()
-        self.original_path = None  # Para papelera: dónde estaba antes
+        self.original_path: Optional[str] = None  # Para papelera: dónde estaba antes
     
     def create_file(self, name: str, content: str = "", file_type: str = "text") -> VirtualFile:
         """Crea un archivo en esta carpeta"""

@@ -6,6 +6,39 @@ from core.plugin_manager import Application
 from config.i18n import tr
 from config.settings import *
 
+# Funciones para manejo de clipboard
+def get_clipboard():
+    """Obtiene texto del clipboard del sistema"""
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()  # Ocultar ventana
+        try:
+            text = root.clipboard_get()
+            return text
+        except:
+            return ""
+        finally:
+            root.destroy()
+    except:
+        return ""
+
+def set_clipboard(text):
+    """Copia texto al clipboard del sistema"""
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()  # Ocultar ventana
+        try:
+            root.clipboard_clear()
+            root.clipboard_append(text)
+            root.update()  # Necesario para actualizar clipboard
+            return True
+        finally:
+            root.destroy()
+    except:
+        return False
+
 
 class TerminalApp(Application):
     """Terminal mejorada con navegación del filesystem y ejecución de Goul"""
@@ -22,6 +55,10 @@ class TerminalApp(Application):
         self.current_path = ""  # Ruta actual en el filesystem
         self.filesystem = None
         self.app_launcher = None
+        self.scroll_offset = 0  # Para scrollbar
+        self.scrollbar_dragging = False  # Para dragging del scrollbar
+        self.last_mouse_y = 0  # Para trackear movimiento del mouse
+        self.window = None  # Referencia a la ventana (se asigna desde engine)
         
         self.commands = {
             "help": self._cmd_help,
@@ -68,6 +105,11 @@ class TerminalApp(Application):
             "  goul <archivo> - Ejecutar archivo Goul",
             "  echo <texto>   - Imprimir texto",
             "  date           - Mostrar fecha/hora",
+            "",
+            "=== Atajos de Teclado ===",
+            "  Ctrl+A         - Copiar todo el historial al clipboard",
+            "  Ctrl+C         - Copiar entrada actual",
+            "  Ctrl+V         - Pegar desde clipboard",
         ]
     
     def _cmd_clear(self, args):
@@ -407,9 +449,72 @@ class TerminalApp(Application):
             elif event.key == pygame.K_UP:
                 # Implementar historial (futuro)
                 pass
+            elif event.key == pygame.K_a and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+A: Copiar todo el historial de terminal
+                all_text = '\n'.join(self.lines)
+                if all_text:
+                    set_clipboard(all_text)
+                    self.lines.append("[Todo el historial copiado al clipboard]")
+            elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+C: Copiar entrada actual
+                if self.current_input:
+                    set_clipboard(self.current_input)
+                    self.lines.append("[Copiado al clipboard]")
+            elif event.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+V: Pegar desde clipboard (soporta múltiples líneas)
+                text = get_clipboard()
+                if text:
+                    # Si contiene saltos de línea, solo pegar la primera línea en entrada
+                    if '\n' in text:
+                        first_line = text.split('\n')[0]
+                        self.current_input += first_line
+                    else:
+                        self.current_input += text
             else:
                 if event.unicode.isprintable():
                     self.current_input += event.unicode
+        
+        # Mouse wheel scroll
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 4:  # Rueda arriba
+                self.scroll_offset = max(0, self.scroll_offset - 3)
+                return
+            elif event.button == 5:  # Rueda abajo
+                if self.window:
+                    line_height = 18
+                    visible_lines = (self.window.content_rect.height - 50) // line_height
+                    max_scroll = max(0, len(self.lines) - visible_lines)
+                    self.scroll_offset = min(max_scroll, self.scroll_offset + 3)
+                return
+            elif event.button == 1 and self.window:  # Click izquierdo en scrollbar
+                rect = self.window.content_rect
+                scrollbar_x = rect.x + rect.width - 12
+                line_height = 18
+                visible_lines = (rect.height - 50) // line_height
+                scrollbar_area = pygame.Rect(scrollbar_x, rect.y + 10, 12, rect.height - 50)
+                
+                if scrollbar_area.collidepoint(event.pos) and len(self.lines) > visible_lines:
+                    self.scrollbar_dragging = True
+                    self.last_mouse_y = event.pos[1]
+                    return
+        
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                self.scrollbar_dragging = False
+        
+        elif event.type == pygame.MOUSEMOTION and self.scrollbar_dragging and self.window:
+            # Dragging scrollbar
+            rect = self.window.content_rect
+            line_height = 18
+            visible_lines = (rect.height - 50) // line_height
+            dy = event.pos[1] - self.last_mouse_y
+            
+            if abs(dy) > 0:
+                # Convertir movimiento del mouse a scroll
+                max_scroll = max(0, len(self.lines) - visible_lines)
+                scroll_delta = (dy * len(self.lines)) // (rect.height - 50)
+                self.scroll_offset = max(0, min(max_scroll, self.scroll_offset + scroll_delta))
+                self.last_mouse_y = event.pos[1]
     
     def update(self, dt):
         self.cursor_blink += dt
@@ -428,11 +533,23 @@ class TerminalApp(Application):
         y = rect.y + 10
         line_height = 18
         
-        # Mostrar últimas líneas que caben
+        # Mostrar líneas con scroll
+        line_height = 18
         visible_lines = (rect.height - 50) // line_height
-        start_idx = max(0, len(self.lines) - visible_lines)
         
-        for line in self.lines[start_idx:]:
+        # Clamped scroll
+        max_scroll = max(0, len(self.lines) - visible_lines)
+        self.scroll_offset = min(self.scroll_offset, max_scroll)
+        
+        start_idx = self.scroll_offset
+        y = rect.y + 10
+        
+        for i in range(visible_lines):
+            line_idx = start_idx + i
+            if line_idx >= len(self.lines):
+                break
+            
+            line = self.lines[line_idx]
             # Colorear comandos (>)
             if line.startswith(">"):
                 text = font.render(line, True, (150, 200, 255))
@@ -440,6 +557,22 @@ class TerminalApp(Application):
                 text = font.render(line, True, (150, 255, 150))
             surface.blit(text, (rect.x + 10, y))
             y += line_height
+        
+        # Dibujar scrollbar
+        if len(self.lines) > visible_lines:
+            scrollbar_x = rect.x + rect.width - 12
+            scrollbar_area = pygame.Rect(scrollbar_x, rect.y + 10, 12, rect.height - 50)
+            
+            # Fondo
+            pygame.draw.rect(surface, (40, 40, 50), scrollbar_area)
+            
+            # Thumb
+            scroll_ratio = self.scroll_offset / max_scroll if max_scroll > 0 else 0
+            thumb_height = max(20, (visible_lines / len(self.lines)) * (rect.height - 50))
+            thumb_y = int(scrollbar_area.y + (scroll_ratio * ((rect.height - 50) - thumb_height)))
+            
+            thumb_rect = pygame.Rect(scrollbar_x, thumb_y, 12, int(thumb_height))
+            pygame.draw.rect(surface, (100, 100, 120), thumb_rect, border_radius=2)
         
         # Prompt actual con ruta
         current_dir = f"~/{self.current_path}" if self.current_path else "~"
@@ -458,6 +591,7 @@ class TextEditorApp(Application):
         self.cursor_line = 0
         self.cursor_col = 0
         self.cursor_blink = 0
+        self.scroll_y = 0  # Scroll vertical
     
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -486,9 +620,46 @@ class TextEditorApp(Application):
             elif event.key == pygame.K_UP and self.cursor_line > 0:
                 self.cursor_line -= 1
                 self.cursor_col = min(self.cursor_col, len(self.lines[self.cursor_line]))
+                if self.cursor_line < self.scroll_y:
+                    self.scroll_y = self.cursor_line
             elif event.key == pygame.K_DOWN and self.cursor_line < len(self.lines) - 1:
                 self.cursor_line += 1
                 self.cursor_col = min(self.cursor_col, len(self.lines[self.cursor_line]))
+                if self.cursor_line > self.scroll_y + 20:
+                    self.scroll_y = self.cursor_line - 20
+            elif event.key == pygame.K_a and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+A: Seleccionar todo y copiar al clipboard
+                all_text = '\n'.join(self.lines)
+                if all_text:
+                    set_clipboard(all_text)
+            elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+C: Copiar línea actual
+                line = self.lines[self.cursor_line]
+                if line:
+                    set_clipboard(line)
+            elif event.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+V: Pegar desde clipboard (soporta múltiples líneas)
+                text = get_clipboard()
+                if text:
+                    # Si el texto contiene saltos de línea, insertar como múltiples líneas
+                    if '\n' in text:
+                        parts = text.split('\n')
+                        line = self.lines[self.cursor_line]
+                        # Primera parte en la línea actual
+                        self.lines[self.cursor_line] = line[:self.cursor_col] + parts[0]
+                        self.cursor_col = len(self.lines[self.cursor_line])
+                        # Resto de líneas
+                        for part in parts[1:]:
+                            self.cursor_line += 1
+                            self.lines.insert(self.cursor_line, part)
+                        self.cursor_col = len(self.lines[self.cursor_line])
+                    else:
+                        # Pegar texto en una sola línea
+                        line = self.lines[self.cursor_line]
+                        self.lines[self.cursor_line] = (line[:self.cursor_col] + 
+                                                       text + 
+                                                       line[self.cursor_col:])
+                        self.cursor_col += len(text)
             else:
                 if event.unicode.isprintable():
                     line = self.lines[self.cursor_line]
@@ -512,11 +683,23 @@ class TextEditorApp(Application):
         
         y = rect.y + 10
         line_height = 22
+        visible_lines = (rect.height - 20) // line_height
         
-        for i, line in enumerate(self.lines):
+        # Clamped scroll
+        max_scroll = max(0, len(self.lines) - visible_lines)
+        self.scroll_y = min(self.scroll_y, max_scroll)
+        
+        # Renderizar líneas con scroll
+        for i in range(visible_lines):
+            line_idx = self.scroll_y + i
+            if line_idx >= len(self.lines):
+                break
+            
+            line = self.lines[line_idx]
+            
             # Highlight de línea actual
-            if i == self.cursor_line:
-                highlight = pygame.Rect(rect.x, y - 2, rect.width, line_height)
+            if line_idx == self.cursor_line:
+                highlight = pygame.Rect(rect.x, y - 2, rect.width - 15, line_height)
                 pygame.draw.rect(surface, Colors.HOVER, highlight)
             
             # Texto
@@ -524,12 +707,28 @@ class TextEditorApp(Application):
             surface.blit(text, (rect.x + 10, y))
             
             # Cursor
-            if i == self.cursor_line and int(self.cursor_blink * 2) % 2 == 0:
+            if line_idx == self.cursor_line and int(self.cursor_blink * 2) % 2 == 0:
                 cursor_x = rect.x + 10 + font.size(line[:self.cursor_col])[0]
                 pygame.draw.line(surface, Colors.TEXT_PRIMARY,
                                (cursor_x, y), (cursor_x, y + line_height - 4), 2)
             
             y += line_height
+        
+        # Dibujar scrollbar
+        if len(self.lines) > visible_lines:
+            scrollbar_x = rect.x + rect.width - 12
+            scrollbar_area = pygame.Rect(scrollbar_x, rect.y + 10, 12, rect.height - 20)
+            
+            # Fondo de scrollbar
+            pygame.draw.rect(surface, (230, 230, 230), scrollbar_area)
+            
+            # Thumb
+            scroll_ratio = self.scroll_y / max_scroll if max_scroll > 0 else 0
+            thumb_height = max(20, (visible_lines / len(self.lines)) * (rect.height - 20))
+            thumb_y = int(scrollbar_area.y + (scroll_ratio * ((rect.height - 20) - thumb_height)))
+            
+            thumb_rect = pygame.Rect(scrollbar_x, thumb_y, 12, int(thumb_height))
+            pygame.draw.rect(surface, (150, 150, 170), thumb_rect, border_radius=2)
 
 
 class FileManagerApp(Application):
@@ -875,6 +1074,10 @@ class MiniBrowserApp(Application):
                 self.scroll_offset += 1
             elif event.key == pygame.K_RETURN:
                 self._load_home_page()
+            elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+C: Copiar URL
+                if self.url:
+                    set_clipboard(self.url)
     
     def render(self, surface, rect):
         # Fondo
@@ -940,7 +1143,7 @@ class MiniBrowserApp(Application):
 
 
 class CodeEditorApp(Application):
-    """Editor de código con soporte para lenguaje Goul y guardado mejorado"""
+    """Editor de código con soporte para lenguaje Goul, scrollbars funcionales e inspirado en VS Code"""
     
     def __init__(self):
         super().__init__(tr("app.code_editor"), color=Colors.YELLOW, app_id="code_editor")
@@ -950,12 +1153,12 @@ class CodeEditorApp(Application):
             "",
             "// Ejemplo: Variables y concatenación",
             "var nombre = \"Pixel\";",
-            "print(\"Hola, \" + nombre + \"!\");",
+            "echo \"Hola, \" + nombre + \"!\";",
             "",
             "// Ejemplo: Arrays",
             "var numeros = [1, 2, 3, 4, 5];",
-            "print(\"Array: \" + str(numeros));",
-            "print(\"Longitud: \" + str(len(numeros)));"
+            "echo \"Array: \" + str(numeros);",
+            "echo \"Longitud: \" + str(len(numeros));"
         ]
         self.cursor_line = 0
         self.cursor_col = 0
@@ -966,13 +1169,22 @@ class CodeEditorApp(Application):
         self.show_save_dialog = False
         self.save_input = ""
         
+        # Scroll
+        self.scroll_y = 0  
+        self.scroll_x = 0
+        self.last_visible_lines = 0  # Para detectar cambios de tamaño
+        
         # Referencia al filesystem (se asignará desde main.py)
         self.filesystem = None
         
         # File tree management
         self.show_file_tree = True
-        self.expanded_folders = set()  # Carpetas expandidas
-        self.current_folder = "Documentos"  # Carpeta actual del navegador
+        self.expanded_folders = set()
+        self.current_folder = "Documentos"
+        
+        # Scrollbar dragging
+        self.scrollbar_dragging = False
+        self.last_mouse_y = 0
     
     def set_filesystem(self, filesystem):
         """Asigna el filesystem virtual para guardar archivos"""
@@ -1049,6 +1261,35 @@ class CodeEditorApp(Application):
                 self._run_code()
                 return
             
+            # PageUp / PageDown para desplazamiento rápido
+            if event.key == pygame.K_PAGEUP:
+                self.scroll_y = max(0, self.scroll_y - self.last_visible_lines)
+                self.cursor_line = max(0, self.cursor_line - self.last_visible_lines)
+                return
+            elif event.key == pygame.K_PAGEDOWN:
+                self.scroll_y = min(len(self.code_lines) - 1, self.scroll_y + self.last_visible_lines)
+                self.cursor_line = min(len(self.code_lines) - 1, self.cursor_line + self.last_visible_lines)
+                return
+            
+            # Ctrl+Home / Ctrl+End para ir al principio/final
+            if event.key == pygame.K_HOME and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                self.cursor_line = 0
+                self.cursor_col = 0
+                self.scroll_y = 0
+                return
+            elif event.key == pygame.K_END and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                self.cursor_line = len(self.code_lines) - 1
+                self.cursor_col = len(self.code_lines[-1])
+                return
+            
+            # Home / End para ir al inicio/final de la línea
+            if event.key == pygame.K_HOME:
+                self.cursor_col = 0
+                return
+            elif event.key == pygame.K_END:
+                self.cursor_col = len(self.code_lines[self.cursor_line])
+                return
+            
             # Navegación y edición de código
             if event.key == pygame.K_RETURN:
                 current = self.code_lines[self.cursor_line]
@@ -1075,62 +1316,159 @@ class CodeEditorApp(Application):
             elif event.key == pygame.K_UP and self.cursor_line > 0:
                 self.cursor_line -= 1
                 self.cursor_col = min(self.cursor_col, len(self.code_lines[self.cursor_line]))
+                if self.cursor_line < self.scroll_y:
+                    self.scroll_y = self.cursor_line
             elif event.key == pygame.K_DOWN and self.cursor_line < len(self.code_lines) - 1:
                 self.cursor_line += 1
                 self.cursor_col = min(self.cursor_col, len(self.code_lines[self.cursor_line]))
+                if self.cursor_line > self.scroll_y + max(1, self.last_visible_lines - 1):
+                    self.scroll_y = self.cursor_line - max(1, self.last_visible_lines - 1)
             elif event.key == pygame.K_TAB:
                 line = self.code_lines[self.cursor_line]
                 self.code_lines[self.cursor_line] = line[:self.cursor_col] + "    " + line[self.cursor_col:]
                 self.cursor_col += 4
+            elif event.key == pygame.K_DELETE:
+                line = self.code_lines[self.cursor_line]
+                if self.cursor_col < len(line):
+                    self.code_lines[self.cursor_line] = line[:self.cursor_col] + line[self.cursor_col + 1:]
+            elif event.key == pygame.K_a and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+A: Seleccionar todo y copiar
+                all_code = '\n'.join(self.code_lines)
+                if all_code:
+                    set_clipboard(all_code)
+                    self.output_lines = ["✓ Todo el código copiado al clipboard"]
+                    self.show_output = True
+            elif event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+C: Copiar línea
+                line = self.code_lines[self.cursor_line]
+                if line:
+                    set_clipboard(line)
+            elif event.key == pygame.K_x and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+X: Cortar línea
+                line = self.code_lines[self.cursor_line]
+                if line:
+                    set_clipboard(line)
+                    self.code_lines.pop(self.cursor_line)
+                    self.cursor_line = min(self.cursor_line, len(self.code_lines) - 1)
+                    self.cursor_col = 0
+            elif event.key == pygame.K_v and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+V: Pegar
+                text = get_clipboard()
+                if text:
+                    if '\n' in text:
+                        parts = text.split('\n')
+                        line = self.code_lines[self.cursor_line]
+                        self.code_lines[self.cursor_line] = line[:self.cursor_col] + parts[0]
+                        self.cursor_col = len(self.code_lines[self.cursor_line])
+                        for part in parts[1:]:
+                            self.cursor_line += 1
+                            self.code_lines.insert(self.cursor_line, part)
+                        self.cursor_col = len(self.code_lines[self.cursor_line])
+                    else:
+                        line = self.code_lines[self.cursor_line]
+                        self.code_lines[self.cursor_line] = (line[:self.cursor_col] + text + line[self.cursor_col:])
+                        self.cursor_col += len(text)
+            elif event.key == pygame.K_z and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                # Ctrl+Z: Deshacer (TODO: implementar historial)
+                pass
             else:
                 if event.unicode.isprintable():
                     line = self.code_lines[self.cursor_line]
                     self.code_lines[self.cursor_line] = line[:self.cursor_col] + event.unicode + line[self.cursor_col:]
                     self.cursor_col += 1
         
-        # Clicks en los botones y el árbol de archivos
-        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.window:
-            mouse_pos = event.pos
-            rect = self.window.content_rect
-            tree_width = 160 if self.show_file_tree else 0
-
-            # Click en el file tree
-            if self.show_file_tree and mouse_pos[0] < rect.x + tree_width:
-                tree_rect = pygame.Rect(rect.x, rect.y + 25, tree_width, rect.height - 65)
-                if tree_rect.collidepoint(mouse_pos):
-                    items = self._get_tree_items()
-                    row_height = 16
-                    start_y = tree_rect.y + 30 + row_height
-                    idx = (mouse_pos[1] - start_y) // row_height
-                    if 0 <= idx < len(items):
-                        item = items[idx]
-                        if item["type"] == "up":
-                            self.current_folder = item["path"]
-                        elif item["type"] == "folder":
-                            self.current_folder = item["path"]
-                        elif item["type"] == "file":
-                            self.load_file(self.current_folder, item["name"])
+        # Mouse wheel scroll
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 4:  # Rueda arriba
+                self.scroll_y = max(0, self.scroll_y - 3)
+                return
+            elif event.button == 5:  # Rueda abajo
+                self.scroll_y = min(len(self.code_lines) - 1, self.scroll_y + 3)
+                return
+            elif event.button == 1 and self.window:  # Click izquierdo
+                self.last_mouse_y = event.pos[1]
+                rect = self.window.content_rect
+                tree_width = 160 if self.show_file_tree else 0
+                code_start_x = rect.x + tree_width
+                
+                # Click en el árbol de archivos
+                if self.show_file_tree and event.pos[0] < rect.x + tree_width:
+                    tree_rect = pygame.Rect(rect.x, rect.y + 25, tree_width, rect.height - 65)
+                    if tree_rect.collidepoint(event.pos):
+                        items = self._get_tree_items()
+                        row_height = 16
+                        start_y = tree_rect.y + 30 + row_height
+                        idx = (event.pos[1] - start_y) // row_height
+                        if 0 <= idx < len(items):
+                            item = items[idx]
+                            if item["type"] == "up":
+                                self.current_folder = item["path"]
+                            elif item["type"] == "folder":
+                                self.current_folder = item["path"]
+                            elif item["type"] == "file":
+                                self.load_file(self.current_folder, item["name"])
+                        return
+                
+                # Click en scrollbar
+                scrollbar_x = rect.x + rect.width - 12
+                scrollbar_area = pygame.Rect(scrollbar_x, rect.y + 35, 12, rect.height - 75)
+                
+                if scrollbar_area.collidepoint(event.pos) and len(self.code_lines) > self.last_visible_lines:
+                    self.scrollbar_dragging = True
+                    self.last_mouse_y = event.pos[1]
                     return
-
-            # Botones inferiores ajustados por sidebar
-            btn_x = rect.x + tree_width + 10
-            btn_y = rect.y + rect.height - 40
-
-            # Botón Guardar
-            save_btn = pygame.Rect(btn_x, btn_y, 80, 30)
-            if save_btn.collidepoint(mouse_pos):
-                self.show_save_dialog = True
-                self.save_input = self.current_file.replace('.goul', '')
-            
-            # Botón Ejecutar
-            run_btn = pygame.Rect(btn_x + 90, btn_y, 80, 30)
-            if run_btn.collidepoint(mouse_pos):
-                self._run_code()
-            
-            # Botón Ver Output
-            output_btn = pygame.Rect(btn_x + 180, btn_y, 100, 30)
-            if output_btn.collidepoint(mouse_pos):
-                self.show_output = not self.show_output
+                
+                # Click en área de código (para colocar cursor)
+                code_area = pygame.Rect(code_start_x, rect.y + 35, rect.width - tree_width - 30, rect.height - 75)
+                if code_area.collidepoint(event.pos):
+                    line_height = 18
+                    relative_y = event.pos[1] - code_area.y
+                    line_idx = self.scroll_y + (relative_y // line_height)
+                    if 0 <= line_idx < len(self.code_lines):
+                        self.cursor_line = line_idx
+                        # Calcular posición del cursor en la línea
+                        try:
+                            font = pygame.font.Font(FONT_PATH, 12)
+                        except:
+                            font = pygame.font.Font(None, 12)
+                        line = self.code_lines[self.cursor_line]
+                        # Aproximación simple: basada en ancho de caracteres
+                        char_width = font.size("x")[0]
+                        relative_x = event.pos[0] - (code_area.x + 35)
+                        self.cursor_col = max(0, min(len(line), relative_x // char_width))
+                    return
+                
+                # Botones inferiores
+                btn_x = code_start_x + 10
+                btn_y = rect.y + rect.height - 40
+                
+                save_btn = pygame.Rect(btn_x, btn_y, 80, 30)
+                if save_btn.collidepoint(event.pos):
+                    self.show_save_dialog = True
+                    self.save_input = self.current_file.replace('.goul', '')
+                
+                run_btn = pygame.Rect(btn_x + 90, btn_y, 80, 30)
+                if run_btn.collidepoint(event.pos):
+                    self._run_code()
+                
+                output_btn = pygame.Rect(btn_x + 180, btn_y, 100, 30)
+                if output_btn.collidepoint(event.pos):
+                    self.show_output = not self.show_output
+        
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                self.scrollbar_dragging = False
+        
+        elif event.type == pygame.MOUSEMOTION and self.scrollbar_dragging and self.window:
+            # Dragging scrollbar
+            rect = self.window.content_rect
+            dy = event.pos[1] - self.last_mouse_y
+            if abs(dy) > 0:
+                # Convertir movimiento del mouse a scroll
+                line_height = 18
+                scroll_delta = (dy * len(self.code_lines)) // (rect.height - 75)
+                self.scroll_y = max(0, min(len(self.code_lines) - self.last_visible_lines, self.scroll_y + scroll_delta))
+                self.last_mouse_y = event.pos[1]
     
     def _save_file(self):
         """Guarda el archivo en el filesystem"""
@@ -1228,7 +1566,8 @@ class CodeEditorApp(Application):
             surface.blit(error_text, (content_x, content_y))
     
     def render(self, surface, rect):
-        # Fondo con tema oscuro
+        """Renderiza el editor de código con scrollbars funcionales"""
+        # Fondo
         pygame.draw.rect(surface, (30, 30, 40), rect)
         
         try:
@@ -1236,75 +1575,106 @@ class CodeEditorApp(Application):
         except:
             font = pygame.font.Font(None, 12)
         
-        # Ancho del sidebar del árbol de archivos
         tree_width = 160 if self.show_file_tree else 0
         
-        # Barra superior con nombre de archivo
+        # Barra superior
         header_rect = pygame.Rect(rect.x, rect.y, rect.width, 25)
         pygame.draw.rect(surface, (40, 40, 50), header_rect)
-        
-        # Mostrar nombre del archivo
         file_text = font.render(f"📝 {self.current_file}", True, (180, 180, 200))
         surface.blit(file_text, (rect.x + 10, rect.y + 5))
         
-        # Renderizar file tree si está visible
+        # Renderizar file tree
         if self.show_file_tree:
             tree_rect = pygame.Rect(rect.x, rect.y + 25, tree_width, rect.height - 65)
             self._render_file_tree(surface, tree_rect, font)
         
-        # Área de código (ajustada por el ancho del sidebar)
+        # Área de código
         code_start_x = rect.x + tree_width
         code_width = rect.width - tree_width
         code_area_height = rect.height - 75 if not self.show_output else (rect.height - 75) // 2
         
-        # Números de línea y código
-        y = rect.y + 35
+        # Altura de línea y cálculo de líneas visibles
         line_height = 18
-        max_lines = min(len(self.code_lines), code_area_height // line_height)
+        visible_lines = code_area_height // line_height
+        self.last_visible_lines = visible_lines
         
-        for i in range(max_lines):
-            line = self.code_lines[i] if i < len(self.code_lines) else ""
+        # Asegurar que scroll_y está dentro de límites
+        max_scroll = max(0, len(self.code_lines) - visible_lines)
+        self.scroll_y = min(max(0, self.scroll_y), max_scroll)
+        
+        # Renderizar líneas de código
+        y = rect.y + 35
+        for i in range(visible_lines):
+            line_idx = self.scroll_y + i
+            if line_idx >= len(self.code_lines):
+                break
+            
+            line = self.code_lines[line_idx]
             
             # Número de línea
-            line_num_text = font.render(str(i + 1), True, (100, 100, 120))
-            surface.blit(line_num_text, (code_start_x + 5, y))
+            line_num = font.render(f"{line_idx + 1:4d}", True, (100, 100, 120))
+            surface.blit(line_num, (code_start_x + 5, y))
             
-            # Highlight línea actual
-            if i == self.cursor_line:
-                highlight = pygame.Rect(code_start_x + 30, y - 2, code_width - 35, line_height)
-                pygame.draw.rect(surface, (50, 50, 70), highlight)
+            # Highlight de la línea actual
+            if line_idx == self.cursor_line:
+                hl_rect = pygame.Rect(code_start_x + 35, y - 2, code_width - 50, line_height)
+                pygame.draw.rect(surface, (50, 50, 70), hl_rect)
             
-            # Código con sintaxis básica
+            # Syntax highlighting simple
             code_color = (150, 200, 150)
             if line.strip().startswith('//'):
                 code_color = (100, 150, 100)
-            elif any(kw in line for kw in ['print', 'var', 'let', 'function', 'class']):
+            elif any(kw in line for kw in ['echo', 'var', 'fn', 'return', 'if', 'else']):
                 code_color = (200, 150, 200)
             
             code_text = font.render(line if line else " ", True, code_color)
             surface.blit(code_text, (code_start_x + 35, y))
             
-            # Cursor
-            if i == self.cursor_line and int(self.cursor_blink * 2) % 2 == 0:
+            # Cursor parpadeante
+            if line_idx == self.cursor_line and int(self.cursor_blink * 2) % 2 == 0:
                 cursor_x = code_start_x + 35 + font.size(line[:self.cursor_col])[0]
                 pygame.draw.line(surface, (200, 200, 100), (cursor_x, y), (cursor_x, y + line_height - 4), 2)
             
             y += line_height
         
-        # Panel de output si está visible
+        # SCROLLBAR VERTICAL (ARREGLADA)
+        if len(self.code_lines) > visible_lines:
+            scrollbar_x = rect.x + rect.width - 14
+            scrollbar_y = rect.y + 35
+            scrollbar_height = code_area_height
+            
+            # Fondo de la scrollbar
+            bg_rect = pygame.Rect(scrollbar_x, scrollbar_y, 12, scrollbar_height)
+            pygame.draw.rect(surface, (40, 40, 50), bg_rect)
+            
+            # Calcular altura y posición del thumb
+            thumb_height_ratio = visible_lines / len(self.code_lines)
+            thumb_height = max(20, int(scrollbar_height * thumb_height_ratio))
+            
+            # Posición del thumb basada en scroll_y
+            scroll_ratio = self.scroll_y / max(1, len(self.code_lines) - visible_lines)
+            thumb_y = int(scrollbar_y + (scroll_ratio * (scrollbar_height - thumb_height)))
+            
+            # Dibujar thumb con hover effect
+            thumb_rect = pygame.Rect(scrollbar_x + 2, thumb_y, 8, thumb_height)
+            hover_color = (120, 120, 140) if self.scrollbar_dragging else (90, 90, 110)
+            pygame.draw.rect(surface, hover_color, thumb_rect, border_radius=2)
+        
+        # Panel de output
         if self.show_output and self.output_lines:
             output_y = rect.y + code_area_height + 35
-            output_rect = pygame.Rect(code_start_x, output_y, code_width, (rect.height - 75) // 2)
+            output_rect = pygame.Rect(code_start_x, output_y, code_width - 14, (rect.height - 75) // 2)
             pygame.draw.rect(surface, (20, 20, 30), output_rect)
+            pygame.draw.rect(surface, (50, 50, 70), output_rect, 1)
             
             # Título
-            title_text = font.render("=== Output ===", True, (150, 150, 200))
+            title_text = font.render("Output", True, (150, 150, 200))
             surface.blit(title_text, (code_start_x + 10, output_y + 5))
             
             # Líneas de output
             out_y = output_y + 25
-            for line in self.output_lines[:10]:  # Mostrar máximo 10 líneas
-                out_text = font.render(line, True, (200, 200, 150))
+            for line in self.output_lines[:10]:
+                out_text = font.render(str(line), True, (200, 200, 150))
                 surface.blit(out_text, (code_start_x + 10, out_y))
                 out_y += line_height
         
@@ -1312,32 +1682,21 @@ class CodeEditorApp(Application):
         btn_y = rect.y + rect.height - 40
         btn_x = code_start_x + 10
         
-        # Botón Guardar
-        save_btn = pygame.Rect(btn_x, btn_y, 80, 30)
-        pygame.draw.rect(surface, (60, 120, 60), save_btn, border_radius=4)
-        save_text = font.render("Guardar", True, (255, 255, 255))
-        surface.blit(save_text, (save_btn.x + 12, save_btn.y + 8))
+        buttons = [
+            (btn_x, "Guardar", (60, 120, 60)),
+            (btn_x + 90, "▶ F5", (60, 100, 160)),
+            (btn_x + 180, "Output", (80, 80, 120) if self.show_output else (60, 60, 80))
+        ]
         
-        # Botón Ejecutar  
-        run_btn = pygame.Rect(btn_x + 90, btn_y, 80, 30)
-        pygame.draw.rect(surface, (60, 100, 160), run_btn, border_radius=4)
-        run_text = font.render("▶ F5", True, (255, 255, 255))
-        surface.blit(run_text, (run_btn.x + 20, run_btn.y + 8))
+        for btn_x_pos, btn_text, btn_color in buttons:
+            btn_rect = pygame.Rect(btn_x_pos, btn_y, 80, 30)
+            pygame.draw.rect(surface, btn_color, btn_rect, border_radius=4)
+            text = font.render(btn_text, True, (255, 255, 255))
+            surface.blit(text, (btn_x_pos + 10, btn_y + 8))
         
-        # Botón Output
-        output_btn = pygame.Rect(btn_x + 180, btn_y, 100, 30)
-        color = (80, 80, 120) if self.show_output else (60, 60, 80)
-        pygame.draw.rect(surface, color, output_btn, border_radius=4)
-        out_btn_text = font.render("Output", True, (200, 200, 200))
-        surface.blit(out_btn_text, (output_btn.x + 25, output_btn.y + 8))
-        
-        # Diálogo de guardado si está activo
+        # Diálogo de guardado
         if self.show_save_dialog:
             self._render_save_dialog(surface, rect, font)
-        
-        # Hints
-        hint_text = font.render("Ctrl+S: Guardar | F5: Ejecutar", True, (100, 100, 120))
-        surface.blit(hint_text, (rect.x + rect.width - 220, btn_y + 8))
     
     def _render_save_dialog(self, surface, rect, font):
         """Renderiza el diálogo de guardado"""
